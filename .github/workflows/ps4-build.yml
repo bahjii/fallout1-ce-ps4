@@ -8,21 +8,21 @@ on:
 jobs:
   build:
     runs-on: ubuntu-22.04
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Build with OpenOrbis Docker
+      - name: Build PS4 package
         run: |
-          docker run --rm \
-            -w /workspace \
-            -v "$GITHUB_WORKSPACE:/workspace" \
-            openorbisofficial/toolchain:latest \
-            bash -c 'export OPENORBIS="$OO_PS4_TOOLCHAIN"; source "$OPENORBIS/ps4vars.sh"; bash os/ps4/build.sh'
+          docker run --rm --user root             -w /workspace             -v "$GITHUB_WORKSPACE:/workspace"             openorbisofficial/toolchain:latest             bash -c '
+              export OPENORBIS="$OO_PS4_TOOLCHAIN"
+              export PATH="$OPENORBIS:$OPENORBIS/bin/linux:$PATH"
+              cd /workspace
+              bash os/ps4/build.sh
+            '
 
       - name: Upload PS4 package
         uses: actions/upload-artifact@v4
         with:
           name: Fallout-1-PS4
-          path: build-ps4/*.pkg
+          path: "**/*.pkg"
+          if-no-files-found: error
