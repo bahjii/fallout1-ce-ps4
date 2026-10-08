@@ -378,3 +378,8 @@ if(APPLE)
 
     include(CPack)
 endif()
+
+if(PS4)
+    include("${CMAKE_SOURCE_DIR}/os/ps4/ps4.cmake")
+    include("${CMAKE_SOURCE_DIR}/os/ps4/packaging.cmake")
+endif()
