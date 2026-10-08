@@ -12,11 +12,6 @@ if [ "$1" = "clean" ]; then
     rm -rf "$BUILD"
 fi
 
-
-unset LDFLAGS
-
-cmake \
-    -S "$ROOT" \
     -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release
 
