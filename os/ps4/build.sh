@@ -15,7 +15,7 @@ fi
 
 unset LDFLAGS
 
-"$OPENORBIS/usr/bin/openorbis-cmake" \
+cmake \
     -S "$ROOT" \
     -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release
