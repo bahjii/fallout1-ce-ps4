@@ -15,7 +15,7 @@ fi
 cmake -S "$ROOT" -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release
 
-cmake --build "$BUILD" -j2
+cmake --build "$BUILD" --target fallout-ce_pkg -j2
 
 echo
 echo "=== Fallout 1 PS4 build artifacts ==="
