@@ -12,11 +12,6 @@ if [ "$1" = "clean" ]; then
     rm -rf "$BUILD"
 fi
 
-if [ ! -f "$OPENORBIS/usr/lib/libjbc.a" ]; then
-    echo "libjbc not found."
-    echo "The OpenOrbis environment is missing libjbc."
-    exit 1
-fi
 
 unset LDFLAGS
 
