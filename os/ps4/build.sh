@@ -12,7 +12,7 @@ if [ "$1" = "clean" ]; then
     rm -rf "$BUILD"
 fi
 
-    -B "$BUILD" \
+cmake -S "$ROOT" -B "$BUILD" \
     -DCMAKE_BUILD_TYPE=Release
 
 cmake --build "$BUILD" -j2
