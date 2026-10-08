@@ -1,0 +1,22 @@
+name: Fallout 1 PS4 Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build with OpenOrbis
+        uses: OpenOrbis/toolchain-action@main
+        with:
+          version: latest
+          command: bash os/ps4/build.sh
+      - name: Upload PS4 package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Fallout-1-PS4
+          path: "**/*.pkg"
