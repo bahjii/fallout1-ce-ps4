@@ -7,6 +7,7 @@
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "audio_engine.h"
@@ -513,6 +514,35 @@ static int dword_6B403F;
 
 static SDL_Surface* gMovieSdlSurface1;
 static SDL_Surface* gMovieSdlSurface2;
+
+// Creates a movie surface whose pitch exactly equals its row width. The MVE
+// decoder addresses pixels as `row * _mveBW`, so any pitch padding added by
+// the platform's SDL (as happens on some console ports) corrupts the frames
+// into blocky garbage.
+static SDL_Surface* movieCreatePackedSurface(int width, int height, int depth, int rmask, int gmask, int bmask)
+{
+    int pitch = width * (depth / 8);
+    void* pixels = calloc((size_t)pitch * height + 64, 1);
+    if (pixels == NULL) {
+        return NULL;
+    }
+    SDL_Surface* surface = SDL_CreateRGBSurfaceFrom(pixels, width, height, depth, pitch, rmask, gmask, bmask, 0);
+    if (surface == NULL) {
+        free(pixels);
+        return NULL;
+    }
+    surface->userdata = pixels;
+    return surface;
+}
+
+static void movieFreePackedSurface(SDL_Surface* surface)
+{
+    if (surface != NULL) {
+        void* pixels = surface->userdata;
+        SDL_FreeSurface(surface);
+        free(pixels);
+    }
+}
 static int gMveSoundBuffer = -1;
 static unsigned int gMveBufferBytes;
 
@@ -1470,12 +1500,12 @@ static void _MVE_sndResume()
 static int _nfConfig(int a1, int a2, int a3, int a4)
 {
     if (gMovieSdlSurface1 != NULL) {
-        SDL_FreeSurface(gMovieSdlSurface1);
+        movieFreePackedSurface(gMovieSdlSurface1);
         gMovieSdlSurface1 = NULL;
     }
 
     if (gMovieSdlSurface2 != NULL) {
-        SDL_FreeSurface(gMovieSdlSurface2);
+        movieFreePackedSurface(gMovieSdlSurface2);
         gMovieSdlSurface2 = NULL;
     }
 
@@ -1505,12 +1535,12 @@ static int _nfConfig(int a1, int a2, int a3, int a4)
         bmask = 0;
     }
 
-    gMovieSdlSurface1 = SDL_CreateRGBSurface(0, _mveBW, _mveBH, depth, rmask, gmask, bmask, 0);
+    gMovieSdlSurface1 = movieCreatePackedSurface(_mveBW, _mveBH, depth, rmask, gmask, bmask);
     if (gMovieSdlSurface1 == NULL) {
         return 0;
     }
 
-    gMovieSdlSurface2 = SDL_CreateRGBSurface(0, _mveBW, _mveBH, depth, rmask, gmask, bmask, 0);
+    gMovieSdlSurface2 = movieCreatePackedSurface(_mveBW, _mveBH, depth, rmask, gmask, bmask);
     if (gMovieSdlSurface2 == NULL) {
         return 0;
     }
@@ -1710,12 +1740,12 @@ static void _MVE_sndRelease()
 static void _nfRelease()
 {
     if (gMovieSdlSurface1 != NULL) {
-        SDL_FreeSurface(gMovieSdlSurface1);
+        movieFreePackedSurface(gMovieSdlSurface1);
         gMovieSdlSurface1 = NULL;
     }
 
     if (gMovieSdlSurface2 != NULL) {
-        SDL_FreeSurface(gMovieSdlSurface2);
+        movieFreePackedSurface(gMovieSdlSurface2);
         gMovieSdlSurface2 = NULL;
     }
 }
