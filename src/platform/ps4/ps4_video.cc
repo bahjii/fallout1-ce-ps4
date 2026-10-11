@@ -19,12 +19,9 @@ namespace {
 
 struct Ps4Video {
     int      video = -1;
-    // Output = the registered flip-buffer resolution. This is the console's actual
-    // video-out mode (720p stays 720p; 4K is capped to 1080p and the display
-    // upscales). The game frame is scaled to FILL it.
     uint32_t outW = 1920;
     uint32_t outH = 1080;
-    uint32_t pitch = 1920; // pixels
+    uint32_t pitch = 1920;
     int      srcW = 0;
     int      srcH = 0;
     void*    fb[PS4_FB_COUNT] = { nullptr, nullptr };
@@ -34,13 +31,9 @@ struct Ps4Video {
     int64_t  frameID = 0;
     bool     ready = false;
 
-    // Fill-scale lookup tables: colLut[ox] = source column for output column ox,
-    // rowLut[oy] = source row for output row oy. Nearest sampling, no per-pixel
-    // division. When out == src*integer this is exactly integer nearest (crisp).
     int*     colLut = nullptr;
     int*     rowLut = nullptr;
 
-    // Movie overlay (ARGB8888), staged from movie.cc; dst is in game/logical coords.
     uint32_t* movie = nullptr;
     int       movieCap = 0;
     int       movieW = 0;
@@ -53,8 +46,6 @@ Ps4Video g;
 
 inline uint32_t toVout(uint32_t xrgb)
 {
-    // gSdlTextureSurface is SDL_PIXELFORMAT_RGB888 (0x00RRGGBB); sceVideoOut buffer
-    // format 0x80000000 wants 0x80RRGGBB.
     return 0x80000000u | (xrgb & 0x00FFFFFFu);
 }
 
@@ -66,8 +57,6 @@ bool ps4VideoInit(int srcW, int srcH)
         return false;
     }
 
-    // If sceVideoOut and direct memory are already initialized, we only need
-    // to update the source resolution and rebuild the scaling LUTs.
     if (g.ready && g.video >= 0) {
         if (g.srcW == srcW && g.srcH == srcH && g.colLut != nullptr && g.rowLut != nullptr) {
             return true;
@@ -114,16 +103,12 @@ bool ps4VideoInit(int srcW, int srcH)
         reportedW = res.width;
         reportedH = res.height;
     }
-    // Cap to 1080p: 720p and 1080p pass through unchanged (valid flip modes), but 4K
-    // (3840x2160) is registered as 1080p and the display upscales — registering 4K
-    // buffers needs the 4K privilege and otherwise fails (app exits to the menu).
     g.outW = reportedW > 1920 ? 1920 : reportedW;
     g.outH = reportedH > 1080 ? 1080 : reportedH;
     g.pitch = g.outW;
     ps4Log("[ps4] videoout out %ux%u (panel %ux%u), src %dx%d\n",
         g.outW, g.outH, reportedW, reportedH, srcW, srcH);
 
-    // Build fill-scale LUTs (src -> out, nearest).
     g.colLut = (int*)malloc(sizeof(int) * g.outW);
     g.rowLut = (int*)malloc(sizeof(int) * g.outH);
     if (g.colLut == nullptr || g.rowLut == nullptr) {
@@ -200,7 +185,6 @@ static void ps4CompositeMovie(uint32_t* fb)
         || g.srcW <= 0 || g.srcH <= 0) {
         return;
     }
-    // The engine dst rect is in game/logical (src) coords; map it to output coords.
     int dx0 = (int)((int64_t)g.movieDst.x * g.outW / g.srcW);
     int dy0 = (int)((int64_t)g.movieDst.y * g.outH / g.srcH);
     int dw = (int)((int64_t)g.movieDst.w * g.outW / g.srcW);
@@ -217,7 +201,7 @@ static void ps4CompositeMovie(uint32_t* fb)
             int px = dx0 + x;
             if (px < 0 || px >= (int)g.outW) continue;
             int srcX = x * g.movieW / dw;
-            drow[px] = toVout(srow[srcX]); // movies are opaque
+            drow[px] = toVout(srow[srcX]);
         }
     }
 }
@@ -229,15 +213,32 @@ void ps4VideoPresent(SDL_Surface* frame)
     }
 
     uint32_t* fb = (uint32_t*)g.fb[g.activeIdx];
-    const uint32_t* src = (const uint32_t*)frame->pixels;
-    int srcPitch = frame->pitch / 4;
+    const uint8_t* srcBytes = (const uint8_t*)frame->pixels;
+    const int srcPitch = frame->pitch; // exact packed stride from the decoder; do not assume 4-byte rows
+    const int srcBpp = frame->format != nullptr ? frame->format->BytesPerPixel : 4;
 
     for (uint32_t oy = 0; oy < g.outH; oy++) {
-        const uint32_t* srow = src + (size_t)g.rowLut[oy] * srcPitch;
+        const uint8_t* srow = srcBytes + (size_t)g.rowLut[oy] * srcPitch;
         uint32_t* drow = fb + (size_t)oy * g.pitch;
-        const int* col = g.colLut;
         for (uint32_t ox = 0; ox < g.outW; ox++) {
-            drow[ox] = toVout(srow[col[ox]]);
+            const int sx = g.colLut[ox];
+            const uint8_t* px = srow + (size_t)sx * srcBpp;
+            uint32_t rgb = 0;
+            if (srcBpp == 4) {
+                rgb = (uint32_t)px[0] | ((uint32_t)px[1] << 8) | ((uint32_t)px[2] << 16);
+            } else if (srcBpp == 3) {
+                rgb = (uint32_t)px[0] | ((uint32_t)px[1] << 8) | ((uint32_t)px[2] << 16);
+            } else if (srcBpp == 2) {
+                rgb = (uint32_t)px[0] | ((uint32_t)px[1] << 8);
+            } else if (srcBpp == 1) {
+                const SDL_Color* c = frame->format != nullptr && frame->format->palette != nullptr
+                    ? &frame->format->palette->colors[px[0]]
+                    : nullptr;
+                if (c != nullptr) {
+                    rgb = (uint32_t)c->r | ((uint32_t)c->g << 8) | ((uint32_t)c->b << 16);
+                }
+            }
+            drow[ox] = toVout(rgb);
         }
     }
 
